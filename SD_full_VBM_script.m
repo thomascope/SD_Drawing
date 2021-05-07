@@ -100,45 +100,33 @@ SD_ages = [
     65.13
     76.31];
 
-% SD_composite = [ % From the number of features
-%     1, 2.022857143
-%     2, 1.368421053
-%     4, 0.798974359
-%     5, 1.03034188
-%     6, 0.772222222
-%     7, 0.276315789
-%     8, 1.138762933
-%     9, 1.151713082
-%     10, 2.041958042
-%     11, 0.399230769
-%     ];%12, 1.464888664];
-% 
-% SD_composite = [ % From recognisability
-%     1, 11
-%     2, 17
-%     4, 17
-%     5, 14
-%     6, 17
-%     7, 17
-%     8, 1
-%     9, 1
-%     10, 3
-%     11, 17
-%     ];%12, 1.464888664];
+SD_composite = [ % From the number of features
+    1, 2.022857143
+    2, 1.368421053
+    4, 0.798974359
+    5, 1.03034188
+    6, 0.772222222
+    7, 0.276315789
+    8, 1.138762933
+    9, 1.151713082
+    10, 2.041958042
+    11, 0.399230769
+    ];%12, 1.464888664];
 
-% SD_composite = [ %Tanmay's familiarity and number of features corrected
-%     1, 4.80205252
-%     2, 2.46657337
-%     4, 1.28510225
-%     5, 2.3776962
-%     6, 1.89127754
-%     7, 0.30034325
-%     8, 1.84938225
-%     9, 2.53559139
-%     10, 4.59332582
-%     11, 0.75593002];
 
-SD_composite = [ %Tanmay's familiarity corrected
+SD_composite_both = [ %Tanmay's familiarity and number of features corrected
+    1, 4.80205252
+    2, 2.46657337
+    4, 1.28510225
+    5, 2.3776962
+    6, 1.89127754
+    7, 0.30034325
+    8, 1.84938225
+    9, 2.53559139
+    10, 4.59332582
+    11, 0.75593002];
+
+SD_composite_FAM = [ %Tanmay's familiarity corrected
     1, 2.237153904
     2, 0.960444365
     4, 0.473513495
@@ -986,205 +974,61 @@ spm_jobman('run', jobs, inputs{:});
 SD_Subparcellate_Temporal_Lobe_AAL
 
 %% Now normalise atlas to template 
-  
+core_imagepaths = [SDmrilist; controlmrilist(1:length(SDmrilist))];
+split_stem_template = regexp(core_imagepaths, '/', 'split');
 path_to_template_6 = cellstr(['/' fullfile(split_stem_template{1}{1:end-1}) '/Template_6.nii']);
-
-matlabbatch{1}.spm.tools.dartel.popnorm.template = path_to_template_6; % Create nonlinear deformation to align the population average with MNI space
-spm_jobman('run',matlabbatch);
 
 dartel_flow = cellstr(['/' fullfile(split_stem_template{1}{1:end-1}) '/y_Template_6_2mni.nii']);
 
-SD_Warp_Atlas_job(dartel_flow,[pwd '/aal_MNI_V4_split.nii'])
+if ~exist(dartel_flow{1},'file')
+    matlabbatch{1}.spm.tools.dartel.popnorm.template = path_to_template_6; % Create nonlinear deformation to align the population average with MNI space
+    spm_jobman('run',matlabbatch);
+end
 
+SD_Warp_Atlas_job(dartel_flow,{[pwd '/aal_MNI_V4_split.nii']})
 
+target = '/imaging/tc02/SD_drawings/from_simon/sub-19361_ses-20160913/smwc1sub-19361_ses-20160913_acq-repmprage_run-02_T1w.nii'; % Single subject image for reslicing
+warped_atlas = [pwd '/waal_MNI_V4_split.nii'];
+path_Template6_2nmi = cellstr(['/' fullfile(split_stem_template{1}{1:end-1}) '/Template_6_2mni.mat']);
+dartel_roi_to_mni(target,warped_atlas,char(path_Template6_2nmi))
 
-% %% Now do GLM within PNFA group with metrics as covariates. NB: MUST ACCOUNT FOR DIFFERENT ORDERING IN THE PNFAMETRICS FILE AND SCAN LIST
-% 
-% PNFAmetrics = load('PNFAmetrics_NBORDERINGNOTSAMEASSCANS');
-% split_stem_SD = regexp(SDmrilist, '/structural/', 'split');
-% 
-% LOCA = zeros(10,1);
-% LOCB = zeros(9,1);
-% all_numbers = zeros(9,1);
-% for i = 1:9
-%     [~,LOCB(i)] = ismember(str2num(split_stem_SD{i}{1}(end-4:end)),(PNFAmetrics.PNFA_WBIC_NUMBERS));
-%     all_numbers(i) = str2num(split_stem_SD{i}{1}(end-4:end));
-% end
-% for i = 1:10
-%     [~,LOCA(i)] = ismember((PNFAmetrics.PNFA_WBIC_NUMBERS(i)),all_numbers);
-% end
-% 
-% %PNFAmetrics.PNFA_WBIC_NUMBERS(LOCB)
-% covariate_types = {
-%     'NonWdAprimeOverall'
-%     'NonWdAprimeEasy'
-%     'tonesAprimeOverall'
-%     'tonesAprimeEasy'
-%     };
-% 
-% tissue_types = {
-%     'GM'
-%     'WM'
-%     };
-% 
-% mask_types = {
-%     'WholeBrain'
-%     'AtrophicROIs'
-%     };
-% 
-% start_directory = pwd;
-% 
-% for covariate_number = 1:4
-%     for tissue_number = 1:2
-%         for mask_number = 1:2
-%             cd(start_directory)
-%             nrun = 1;
-%             jobfile = {'/imaging/mlr/users/tc02/vespa/scans/PNFA_VBM/tom/VBM_TIV_regression.m'};
-%             jobs = repmat(jobfile, 1, nrun);
-%             
-%             inputs = cell(6, nrun);
-%             stats_folder = {['/imaging/mlr/users/tc02/SD_drawings/preprocess/VBM_stats/regression/' mask_types{mask_number} '_' tissue_types{tissue_number} '_' covariate_types{covariate_number}]};
-%             split_stem_controls = regexp(controlmrilist, '/structural/', 'split');
-%             
-%             inputs{1, 1} = stats_folder;
-%             
-%             if tissue_number == 1
-%                 for crun = 1:nrun
-%                     inputs{2, 1} = cell(length(SDmrilist),1);
-%                     for i = 1:length(SDmrilist)
-%                         inputs{2,crun}(i) = cellstr([split_stem_SD{i}{1} '/structural/smwc1' split_stem_SD{i}{2}]);
-%                     end
-%                 end
-%             elseif tissue_number == 2
-%                 for crun = 1:nrun
-%                     inputs{2, 1} = cell(length(SDmrilist),1);
-%                     for i = 1:length(SDmrilist)
-%                         inputs{2,crun}(i) = cellstr([split_stem_SD{i}{1} '/structural/smwc2' split_stem_SD{i}{2}]);
-%                     end
-%                 end
-%             end
-%             
-%             unorderedcovariate = eval(['PNFAmetrics.' covariate_types{covariate_number}]);
-%             inputs{3,crun} = unorderedcovariate(LOCB);
-%             
-%             inputs{4,crun} = [covariate_types{covariate_number}];
-%             
-%             try
-%                 inputs{5, 1} = tiv(1:length(SDmrilist));
-%             catch
-%                 tivstem = ['/imaging/mlr/users/tc02/SD_drawings/preprocess/volumes_PNFA_VBM.csv'];
-%                 filename = [tivstem '.csv'];
-%                 delimiter = ',';
-%                 startRow = 2;
-%                 endRow = inf;
-%                 formatSpec = '%s%f%f%f%[^\n\r]';
-%                 fileID = fopen(filename,'r');
-%                 dataArray = textscan(fileID, formatSpec, endRow(1)-startRow(1)+1, 'Delimiter', delimiter, 'HeaderLines', startRow(1)-1, 'ReturnOnError', false);
-%                 fclose(fileID);
-%                 tiv= dataArray{2}+dataArray{3}+dataArray{4};
-%                 inputs{5, 1} = tiv(1:length(SDmrilist));
-%             end
-%             load('VBM_ages.mat')
-%             inputs{6, 1} = pnfaages;
-%             if mask_number == 1
-%                 if tissue_number == 1
-%                     inputs{7, 1} = {'control_majority_unsmoothed_mask_c1_thr0.05_cons0.8.img'};
-%                 elseif tissue_number == 2
-%                     inputs{7, 1} = {'control_majority_unsmoothed_mask_c2_thr0.05_cons0.8.img'};
-%                 end
-%             else
-%                 if tissue_number == 1
-%                     inputs{7, 1} = {'/imaging/mlr/users/tc02/SD_drawings/preprocess/VBM_stats/VBM_illustration_files/GM_clusterwise_PNFA.nii'};
-%                 elseif tissue_number == 2
-%                     inputs{7, 1} = {'/imaging/mlr/users/tc02/SD_drawings/preprocess/VBM_stats/VBM_illustration_files/WM_clusterwise_PNFA.nii'};
-%                 end
-%             end
-%             
-%             if ~exist(char(inputs{7, 1}),'file')
-%                 core_imagepaths = [SDmrilist; controlmrilist(1:length(SDmrilist))];
-%                 split_stem_template = regexp(core_imagepaths, '/', 'split');
-%                 path_to_template_6 = cellstr(['/' fullfile(split_stem_template{1}{1:end-1}) '/Template_6.nii']);
-%                 make_WM_VBM_explicit_mask(controlmrilist, path_to_template_6, 'control')
-%             end
-%             
-%             spm_jobman('run', jobs, inputs{:});
-%             
-%             inputs = cell(1, nrun);
-%             inputs{1, 1} =  {[char(stats_folder) '/SPM.mat']};
-%             
-%             jobfile = {'/imaging/mlr/users/tc02/vespa/scans/PNFA_VBM/tom/VBM_batch_estimate.m'};
-%             jobs = repmat(jobfile, 1, nrun);
-%             
-%             spm_jobman('run', jobs, inputs{:});
-%             
-%             jobfile = {'/imaging/mlr/users/tc02/vespa/scans/PNFA_VBM/tom/VBM_batch_regression_contrast.m'};
-%             jobs = repmat(jobfile, 1, nrun);
-%             
-%             spm_jobman('run', jobs, inputs{:});
-%             
-%             jobfile = {'/imaging/mlr/users/tc02/vespa/scans/PNFA_VBM/tom/VBM_batch_results.m'};
-%             jobs = repmat(jobfile, 1, nrun);
-%             
-%             spm_jobman('run', jobs, inputs{:});
-%         end
-%     end
-% end
-% % %% Now extract ROI values for GM - WILL NOT WORK WITHOUT PRESTEPS, SEE COMMENTS
-% %
-% % % Need to normalise atlas to template - change files in /home/tc02/Regionofinterestscripts/dartel_mni_icbm/warp_ICBM_atlas_to_template.m
-% %
-% % % Then normalise to MNI - /home/tc02/Regionofinterestscripts/dartel_mni_icbm/dartel_roi_to_mni.m
-% %
-% % % aal regional lookup table: /home/tc02/PickAtlas/WFU_PickAtlas_3.0.5b/wfu_pickatlas/MNI_atlas_templates
-% %
-% % split_stem_SD = regexp(SDmrilist, '/structural/', 'split');
-% % filepath = cell(length(SDmrilist),1);
-% % for crun = 1:length(SDmrilist)
-% %     filepath{crun} = [split_stem_SD{crun}{1} '/structural/smwc1' split_stem_SD{crun}{2}];
-% % end
-% %
-% % mask =  {'matched_control_majority_smoothed_mask_c1_thr0.1_cons0.8.img'};
-% %
-% % %spm_summarise(char(filepath), '/home/tc02/Regionofinterestscripts/rwaal_nfvPPA_2mni.nii')
-% % addpath('/home/tc02/Regionofinterestscripts/masaroi/')
-% % masaroi(0,Inf, ['a'], char(filepath), ['/home/tc02/Regionofinterestscripts/rwaal_nfvPPA_2mni.nii'],char(mask),[],1,'aal') ;
-% %
-% % filename = [pwd '/nfvPPA_roi_density.txt'];
-% % movefile([pwd '/all_roi_results.txt'],filename)
-% %
-% % roidata = importdata('nfvPPA_roi_density.txt');
-% %
-% % try
-% %     all_tivs = tiv;
-% % catch
-% %     tivstem = ['/imaging/mlr/users/tc02/SD_drawings/preprocess/volumes_PNFA_VBM.csv'];
-% %     filename = [tivstem '.csv'];
-% %     delimiter = ',';
-% %     startRow = 2;
-% %     endRow = inf;
-% %     formatSpec = '%s%f%f%f%[^\n\r]';
-% %     fileID = fopen(filename,'r');
-% %     dataArray = textscan(fileID, formatSpec, endRow(1)-startRow(1)+1, 'Delimiter', delimiter, 'HeaderLines', startRow(1)-1, 'ReturnOnError', false);
-% %     fclose(fileID);
-%     tiv= dataArray{2}+dataArray{3}+dataArray{4};
-%     all_tivs = tiv;
-% end
-%
-% PNFAmetrics = load('SDmetrics');
-% LOCA = zeros(10,1);
-% LOCB = zeros(9,1);
-% all_numbers = zeros(9,1);
-% for i = 1:9
-%     [~,LOCB(i)] = ismember(str2num(split_stem_SD{i}{1}(end-4:end)),(PNFAmetrics.PNFA_WBIC_NUMBERS));
-%     all_numbers(i) = str2num(split_stem_SD{i}{1}(end-4:end));
-% end
-% for i = 1:10
-%     [~,LOCA(i)] = ismember((PNFAmetrics.PNFA_WBIC_NUMBERS(i)),all_numbers);
-% end
-%
+% Now do the extraction
+split_stem_SD = regexp(SDmrilist, '/', 'split');
+filepath = cell(length(SDmrilist),1);
+for i = 1:length(SDmrilist)
+    filepath{i} = ['/' fullfile(split_stem_SD{i}{1:end-1}) '/smwc1' split_stem_SD{i}{end}];
+end
+
+mask =  {'control_majority_smoothed_mask_c1_thr0.1_cons0.8.img'};
+
+%spm_summarise(char(filepath), '/home/tc02/Regionofinterestscripts/rwaal_nfvPPA_2mni.nii')
+addpath('/home/tc02/Regionofinterestscripts/masaroi/')
+masaroi(0,Inf, ['a'], char(filepath), [pwd '/rwaal_MNI_V4_split.nii'],char(mask),[],1,'aal') ;
+
+filename = [pwd '/SD_roi_density.txt'];
+movefile([pwd '/all_roi_results.txt'],filename)
+
+roidata = importdata('SD_roi_density.txt');
+
+try
+    all_tivs = tiv;
+catch
+    tivstem = ['/imaging/mlr/users/tc02/SD_drawings/preprocess/volumes_PNFA_VBM'];
+    filename = [tivstem '.csv'];
+    delimiter = ',';
+    startRow = 2;
+    endRow = inf;
+    formatSpec = '%s%f%f%f%[^\n\r]';
+    fileID = fopen(filename,'r');
+    dataArray = textscan(fileID, formatSpec, endRow(1)-startRow(1)+1, 'Delimiter', delimiter, 'HeaderLines', startRow(1)-1, 'ReturnOnError', false);
+    fclose(fileID);
+    tiv= dataArray{2}+dataArray{3}+dataArray{4};
+    all_tivs = tiv;
+end
+
 % all_ROInames = importdata('/home/tc02/PickAtlas/WFU_PickAtlas_3.0.5b/wfu_pickatlas/MNI_atlas_templates/aal_MNI_V4.txt');
-%
-%
+% 
+% 
 % ROInames = {'Frontal_Inf_Tri_L', 'Frontal_Inf_Oper_L', 'Rolandic_Oper_L', 'Putamen_L', 'Caudate_L', 'Frontal_Inf_Tri_R', 'Frontal_Inf_Oper_R', 'Rolandic_Oper_R', 'Putamen_R', 'Caudate_R'};
 % ROInumbers = zeros(size(ROInames));
 % for i = 1:length(ROInames)
@@ -1193,45 +1037,98 @@ SD_Warp_Atlas_job(dartel_flow,[pwd '/aal_MNI_V4_split.nii'])
 %     thisROI_number = all_ROInames{thisROI_index}(1:(thisROI_place{thisROI_index}-1));
 %     ROInumbers(i) = str2num(thisROI_number);
 % end
-%
-% %ROInumber is in column 1, mean is column 7, median is column 8, nonzero mean is column 14, masked mean is column 28 and median is column 29
-% extracted_roi_values = zeros(10,length(ROInames));
-% extracted_masked_roi_values = zeros(10,length(ROInames));
-% extracted_nonzero_roi_values = zeros(10,length(ROInames));
-% correctedgrey = zeros(10,1);
-% for i = 1:10
-%     if LOCA(i) ~= 0
-%         numbertoworkon = all_numbers(LOCA(i));
-%         thistiv = all_tivs(LOCA(i)); %Remember to correct for TIV!
-%         thistotalgrey = dataArray{2}(LOCA(i));
-%     else
-%         numbertoworkon = NaN;
-%         thistiv = NaN;
-%         thistotalgrey = NaN;
-%     end
-%
-%     IndexC = strfind(roidata.textdata(:,1),num2str(numbertoworkon));
-%     Index_thispatient = find(not(cellfun('isempty', IndexC)));
-%     Index_thispatient = Index_thispatient-1; %account for header row
-%
-%     for j = 1:length(ROInames)
-%         IndexC = roidata.data(:,1) == ROInumbers(j);
-%         current_row = Index_thispatient(IndexC(Index_thispatient));
-%         if isempty(current_row)
-%             extracted_roi_values(i,j) = NaN;
-%             extracted_nonzero_roi_values(i,j) = NaN;
-%             extracted_masked_roi_values(i,j) = NaN;
-%         else
-%             extracted_roi_values(i,j) = roidata.data(current_row,7)/thistiv;
-%             extracted_nonzero_roi_values(i,j) = roidata.data(current_row,14)/thistiv;
-%             extracted_masked_roi_values(i,j) = roidata.data(current_row,28)/thistiv;
-%         end
-%     end
-%
-%     correctedgrey(i) = thistotalgrey/thistiv;
-%
-% end
-%
+ROInumbers = [83,94,93,92,91,55,84,98,97,96,95,56]; %From subparcellation, instead of roi names.
+ROInames = {'L Pole','L Inf Front','L Inf Mid Front','L Inf Mid Back','L Inf Back','L Fusiform','R Pole','R Inf Front','R Inf Mid Front','R Inf Mid Back','R Inf Back','R Fusiform'};
+ROInames_noside = {'Pole','Inf Front','Inf Mid Front','Inf Mid Back','Inf Back','Fusiform'};
+%ROInumber is in column 1, mean is column 7, median is column 8, nonzero mean is column 14, masked mean is column 28 and median is column 29
+extracted_roi_values = zeros(size(SD_composite,1),length(ROInames));
+extracted_masked_roi_values = zeros(size(SD_composite,1),length(ROInames));
+extracted_nonzero_roi_values = zeros(size(SD_composite,1),length(ROInames));
+correctedgrey = zeros(size(SD_composite,1),1);
+omit_these = [];
+for i = 1:length(SDmrilist)
+    this_cov_row = find(SD_composite(:,1)==i);
+    if isempty(this_cov_row)
+        warning(['No covariate for scan number ' num2str(i) ', omitting it'])
+        omit_these = [omit_these, i];
+    elseif length(this_cov_row)==1
+        scantoworkon = filepath{i};
+        thistiv = all_tivs(length(controlmrilist)+i); %TIV calculated for all MRIs, with controls first
+        thistotalgrey = dataArray{2}(length(controlmrilist)+i);
+    else
+        error(['More than one covariate for scan number ' num2str(i) ', check your inputs'])
+    end
+
+    IndexC = strfind(roidata.textdata(:,1),scantoworkon);
+    Index_thispatient = find(not(cellfun('isempty', IndexC)));
+    Index_thispatient = Index_thispatient-1; %account for header row
+
+    for j = 1:length(ROInames)
+        IndexC = roidata.data(:,1) == ROInumbers(j);
+        current_row = Index_thispatient(IndexC(Index_thispatient));
+        if isempty(current_row)
+            extracted_roi_values(i,j) = NaN;
+            extracted_nonzero_roi_values(i,j) = NaN;
+            extracted_masked_roi_values(i,j) = NaN;
+        else
+            extracted_roi_values(i,j) = roidata.data(current_row,7)/thistiv;
+            extracted_nonzero_roi_values(i,j) = roidata.data(current_row,14)/thistiv;
+            extracted_masked_roi_values(i,j) = roidata.data(current_row,28)/thistiv;
+        end
+    end
+
+    correctedgrey(i) = thistotalgrey/thistiv;
+
+end
+extracted_roi_values(omit_these,:) = [];
+extracted_masked_roi_values(omit_these,:) = [];
+extracted_nonzero_roi_values(omit_these,:) = [];
+correctedgrey(omit_these,:) = [];
+
+figure
+hold on
+[rho,~] = corr(SD_composite(:,2),extracted_masked_roi_values,'type','Spearman');
+plot(rho(1:floor(length(rho)/2)),'b')
+plot(rho(1+ceil(length(rho)/2):end),'r')
+legend({'Left','Right'},'location','southeast')
+set(gca,'xtick',[1:length(ROInames_noside)],'xticklabels',ROInames_noside,'XTickLabelRotation',45,'TickLabelInterpreter','none')
+xlim([0 length(ROInames_noside)+1])
+ylim([-1 0.1])
+ylabel('Spearman Correlation')
+plot([0 13],[-0.648 -0.648],'k--')
+plot([0 13],[-0.564 -0.564],'k--')
+plot([0 13],[0 0],'k-')
+title('Correlation of Composite Score to Grey Matter')
+
+figure
+hold on
+[rho,~] = corr(SD_composite_FAM(:,2),extracted_masked_roi_values,'type','Spearman');
+plot(rho(1:floor(length(rho)/2)),'b')
+plot(rho(1+ceil(length(rho)/2):end),'r')
+legend({'Left','Right'},'location','southeast')
+set(gca,'xtick',[1:length(ROInames_noside)],'xticklabels',ROInames_noside,'XTickLabelRotation',45,'TickLabelInterpreter','none')
+xlim([0 length(ROInames_noside)+1])
+ylim([-1 0.1])
+ylabel('Spearman Correlation')
+plot([0 13],[-0.648 -0.648],'k--')
+plot([0 13],[-0.564 -0.564],'k--')
+plot([0 13],[0 0],'k-')
+title('Correlation of Familiarity Score to Grey Matter')
+
+figure
+hold on
+[rho,~] = corr(SD_composite_both(:,2),extracted_masked_roi_values,'type','Spearman');
+plot(rho(1:floor(length(rho)/2)),'b')
+plot(rho(1+ceil(length(rho)/2):end),'r')
+legend({'Left','Right'},'location','southeast')
+set(gca,'xtick',[1:length(ROInames_noside)],'xticklabels',ROInames_noside,'XTickLabelRotation',45,'TickLabelInterpreter','none')
+xlim([0 length(ROInames_noside)+1])
+ylim([-1 0.1])
+ylabel('Spearman Correlation')
+plot([0 13],[-0.648 -0.648],'k--')
+plot([0 13],[-0.564 -0.564],'k--')
+plot([0 13],[0 0],'k-')
+title('Correlation of Combined Score to Grey Matter')
 
 %% Now create some figures for visualisation
 

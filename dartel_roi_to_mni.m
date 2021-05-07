@@ -13,7 +13,6 @@ function dartel_roi_to_mni(target,warped_atlas,path_Template6_2nmi)
 load(path_Template6_2nmi);
 M = mni.affine;
  
-warped_atlas=
 Nii = nifti(warped_atlas);
 Nii.mat = M;
 Nii.mat_intent = 4;
