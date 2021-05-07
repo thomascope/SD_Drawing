@@ -1119,8 +1119,8 @@ plot([0 length(ROInames_noside)],[0 0],'k-')
 text(length(ROInames_noside)+0.1,-0.564,'p<0.05')
 text(length(ROInames_noside)+0.1,-0.648,'p<0.025')
 text(length(ROInames_noside)+0.1,-0.745,'p<0.01')
-title('Composite Score to Grey Matter Volume')
-spm_renumber_atlas('./rwaal_MNI_V4_split.nii',[ROInumbers(1:(length(ROInumbers)/2)-1),ROInumbers(1+(length(ROInumbers)/2):end-1)],[rho(1:(length(ROInumbers)/2)-1),rho(1+(length(ROInumbers)/2):end-1)],'_Composite') %Omit the fusiform to make it neater
+title('Composite Score to Grey Matter Atrophy')
+%spm_renumber_atlas('./rwaal_MNI_V4_split.nii',[ROInumbers(1:(length(ROInumbers)/2)-1),ROInumbers(1+(length(ROInumbers)/2):end-1)],[rho(1:(length(ROInumbers)/2)-1),rho(1+(length(ROInumbers)/2):end-1)],'_Composite') %Omit the fusiform to make it neater
 
 figure
 set(gcf,'color','w')
@@ -1140,8 +1140,8 @@ plot([0 length(ROInames_noside)],[0 0],'k-')
 text(length(ROInames_noside)+0.1,-0.564,'p<0.05')
 text(length(ROInames_noside)+0.1,-0.648,'p<0.025')
 text(length(ROInames_noside)+0.1,-0.745,'p<0.01')
-title('Familiarity Score to Grey Matter Volume')
-spm_renumber_atlas('./rwaal_MNI_V4_split.nii',[ROInumbers(1:(length(ROInumbers)/2)-1),ROInumbers(1+(length(ROInumbers)/2):end-1)],[rho(1:(length(ROInumbers)/2)-1),rho(1+(length(ROInumbers)/2):end-1)],'_Familiarity') %Omit the fusiform to make it neater
+title('Familiarity Score to Grey Matter Atrophy')
+%spm_renumber_atlas('./rwaal_MNI_V4_split.nii',[ROInumbers(1:(length(ROInumbers)/2)-1),ROInumbers(1+(length(ROInumbers)/2):end-1)],[rho(1:(length(ROInumbers)/2)-1),rho(1+(length(ROInumbers)/2):end-1)],'_Familiarity') %Omit the fusiform to make it neater
 
 figure
 set(gcf,'color','w')
@@ -1161,8 +1161,135 @@ plot([0 length(ROInames_noside)],[0 0],'k-')
 text(length(ROInames_noside)+0.1,-0.564,'p<0.05')
 text(length(ROInames_noside)+0.1,-0.648,'p<0.025')
 text(length(ROInames_noside)+0.1,-0.745,'p<0.01')
-title('Combined Score to Grey Matter Volume')
-spm_renumber_atlas('./rwaal_MNI_V4_split.nii',[ROInumbers(1:(length(ROInumbers)/2)-1),ROInumbers(1+(length(ROInumbers)/2):end-1)],[rho(1:(length(ROInumbers)/2)-1),rho(1+(length(ROInumbers)/2):end-1)],'_Combined') %Omit the fusiform to make it neater
+title('Combined Score to Grey Matter Atrophy')
+%spm_renumber_atlas('./rwaal_MNI_V4_split.nii',[ROInumbers(1:(length(ROInumbers)/2)-1),ROInumbers(1+(length(ROInumbers)/2):end-1)],[rho(1:(length(ROInumbers)/2)-1),rho(1+(length(ROInumbers)/2):end-1)],'_Combined') %Omit the fusiform to make it neater
+
+% Now repeat using SPM single subjects - same answer but probably more optimal
+split_stem_SD = regexp(SDmrilist, '/', 'split');
+filepath = cell(length(SDmrilist),1);
+for i = 1:length(SDmrilist)
+    filepath{i} = ['/imaging/mlr/users/tc02/SD_drawings/preprocess/VBM_stats/factorial_single_subject/patient_' num2str(i) '/con_0002.nii'];
+    %filepath{i} = ['/imaging/mlr/users/tc02/SD_drawings/preprocess/VBM_stats/factorial_single_subject/patient_' num2str(i) '/spmT_0002.nii'];
+end
+
+mask =  {'control_majority_smoothed_mask_c1_thr0.1_cons0.8.img'};
+
+%spm_summarise(char(filepath), '/home/tc02/Regionofinterestscripts/rwaal_nfvPPA_2mni.nii')
+addpath('/home/tc02/Regionofinterestscripts/masaroi/')
+masaroi(0,Inf, ['a'], char(filepath), [pwd '/rwaal_MNI_V4_split.nii'],char(mask),[],1,'aal') ;
+
+filename = [pwd '/SD_roi_density_SPM.txt'];
+movefile([pwd '/all_roi_results.txt'],filename)
+
+roidata = importdata('SD_roi_density_SPM.txt');
+
+ROInumbers = [83,87,94,93,92,91,55,84,88,98,97,96,95,56]; %From subparcellation, instead of roi names.
+ROInames = {'L Pole Up','L Pole Mid','L Inf Front','L Inf Mid Front','L Inf Mid Back','L Inf Back','L Fusiform','R Pole Up','R Pole Mid','R Inf Front','R Inf Mid Front','R Inf Mid Back','R Inf Back','R Fusiform'};
+ROInames_noside = {'Sup Pole', 'Mid Pole','Inf Gy Front','Inf Gy Mid Front','Inf Gy Mid Back','Inf Gy Back','Fusiform Gy'};
+%ROInumber is in column 1, mean is column 7, median is column 8, nonzero mean is column 14, masked mean is column 28 and median is column 29
+extracted_roi_values = zeros(size(SD_composite,1),length(ROInames));
+extracted_masked_roi_values = zeros(size(SD_composite,1),length(ROInames));
+extracted_nonzero_roi_values = zeros(size(SD_composite,1),length(ROInames));
+correctedgrey = zeros(size(SD_composite,1),1);
+omit_these = [];
+for i = 1:length(SDmrilist)
+    this_cov_row = find(SD_composite(:,1)==i);
+    if isempty(this_cov_row)
+        warning(['No covariate for scan number ' num2str(i) ', omitting it'])
+        omit_these = [omit_these, i];
+    elseif length(this_cov_row)==1
+        scantoworkon = filepath{i};
+        thistiv = all_tivs(length(controlmrilist)+i); %TIV calculated for all MRIs, with controls first
+        thistotalgrey = dataArray{2}(length(controlmrilist)+i);
+    else
+        error(['More than one covariate for scan number ' num2str(i) ', check your inputs'])
+    end
+
+    IndexC = strfind(roidata.textdata(:,1),scantoworkon);
+    Index_thispatient = find(not(cellfun('isempty', IndexC)));
+    Index_thispatient = Index_thispatient-1; %account for header row
+
+    for j = 1:length(ROInames)
+        IndexC = roidata.data(:,1) == ROInumbers(j);
+        current_row = Index_thispatient(IndexC(Index_thispatient));
+        if isempty(current_row)
+            extracted_roi_values(i,j) = NaN;
+            extracted_nonzero_roi_values(i,j) = NaN;
+            extracted_masked_roi_values(i,j) = NaN;
+        else
+            extracted_roi_values(i,j) = roidata.data(current_row,7);
+            extracted_nonzero_roi_values(i,j) = roidata.data(current_row,14);
+            extracted_masked_roi_values(i,j) = roidata.data(current_row,28);
+        end
+    end
+
+end
+extracted_roi_values(omit_these,:) = [];
+extracted_masked_roi_values(omit_these,:) = [];
+extracted_nonzero_roi_values(omit_these,:) = [];
+
+figure
+set(gcf,'color','w')
+hold on
+[rho,~] = corr(SD_composite(:,2),extracted_masked_roi_values,'type','Spearman');
+plot(-rho(1:floor(length(rho)/2)),'b')
+plot(-rho(1+ceil(length(rho)/2):end),'r')
+legend({'Left','Right'},'location','southeast')
+set(gca,'xtick',[1:length(ROInames_noside)],'xticklabels',ROInames_noside,'XTickLabelRotation',45,'TickLabelInterpreter','none')
+xlim([0 length(ROInames_noside)+1])
+ylim([-1 0.1])
+ylabel('Spearman Correlation')
+plot([0 length(ROInames_noside)],[-0.745 -0.745],'k--')
+plot([0 length(ROInames_noside)],[-0.648 -0.648],'k--')
+plot([0 length(ROInames_noside)],[-0.564 -0.564],'k--')
+plot([0 length(ROInames_noside)],[0.745 0.745],'k--')
+plot([0 length(ROInames_noside)],[0.648 0.648],'k--')
+plot([0 length(ROInames_noside)],[0.564 0.564],'k--')
+plot([0 length(ROInames_noside)],[0 0],'k-')
+text(length(ROInames_noside)+0.1,-0.564,'p<0.05')
+text(length(ROInames_noside)+0.1,-0.648,'p<0.025')
+text(length(ROInames_noside)+0.1,-0.745,'p<0.01')
+title('Composite Score to Grey Matter Atrophy')
+
+figure
+set(gcf,'color','w')
+hold on
+[rho,~] = corr(SD_composite_FAM(:,2),extracted_masked_roi_values,'type','Spearman');
+plot(-rho(1:floor(length(rho)/2)),'b')
+plot(-rho(1+ceil(length(rho)/2):end),'r')
+legend({'Left','Right'},'location','southeast')
+set(gca,'xtick',[1:length(ROInames_noside)],'xticklabels',ROInames_noside,'XTickLabelRotation',45,'TickLabelInterpreter','none')
+xlim([0 length(ROInames_noside)+1])
+ylim([-1 0.1])
+ylabel('Spearman Correlation')
+plot([0 length(ROInames_noside)],[-0.745 -0.745],'k--')
+plot([0 length(ROInames_noside)],[-0.648 -0.648],'k--')
+plot([0 length(ROInames_noside)],[-0.564 -0.564],'k--')
+plot([0 length(ROInames_noside)],[0 0],'k-')
+text(length(ROInames_noside)+0.1,-0.564,'p<0.05')
+text(length(ROInames_noside)+0.1,-0.648,'p<0.025')
+text(length(ROInames_noside)+0.1,-0.745,'p<0.01')
+title('Familiarity Score to Grey Matter Atrophy')
+
+figure
+set(gcf,'color','w')
+hold on
+[rho,~] = corr(SD_composite_both(:,2),extracted_masked_roi_values,'type','Spearman');
+plot(-rho(1:floor(length(rho)/2)),'b')
+plot(-rho(1+ceil(length(rho)/2):end),'r')
+legend({'Left','Right'},'location','southeast')
+set(gca,'xtick',[1:length(ROInames_noside)],'xticklabels',ROInames_noside,'XTickLabelRotation',45,'TickLabelInterpreter','none')
+xlim([0 length(ROInames_noside)+1])
+ylim([-1 0.1])
+ylabel('Spearman Correlation')
+plot([0 length(ROInames_noside)],[-0.745 -0.745],'k--')
+plot([0 length(ROInames_noside)],[-0.648 -0.648],'k--')
+plot([0 length(ROInames_noside)],[-0.564 -0.564],'k--')
+plot([0 length(ROInames_noside)],[0 0],'k-')
+text(length(ROInames_noside)+0.1,-0.564,'p<0.05')
+text(length(ROInames_noside)+0.1,-0.648,'p<0.025')
+text(length(ROInames_noside)+0.1,-0.745,'p<0.01')
+title('Combined Score to Grey Matter Atrophy')
 
 %% Now create some figures for visualisation
 
