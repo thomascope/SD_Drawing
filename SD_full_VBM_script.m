@@ -820,7 +820,6 @@ parfor crun = 1:nrun
 end
 
 nrun = 1;
-jobfile = {'/imaging/mlr/users/tc02/vespa/scans/PNFA_VBM/tom/VBM_batch_imcalc_average.m'};
 inputs = cell(2, nrun);
 
 split_stem = regexp(core_imagepaths, '/', 'split');
@@ -830,21 +829,38 @@ for i = 1:length(core_imagepaths)
     inputs{1,1}(i) = cellstr(['/' fullfile(split_stem{i}{1:end-1}) '//w' split_stem{i}{end}]);
 end
 
-inputs{2,1} = ['average_matchedcontrol_SD_T1head'];
+inputs{2,1} = 'average_matchedcontrol_SD_T1head.nii';
 
-imcalcworkedcorrectly = zeros(1,nrun);
-jobs = repmat(jobfile, 1, 1);
+flags.dmtx = 1; %Read into data matrix
+spm_imcalc(inputs{1,1},inputs{2,1},'mean(X)',flags); %Calculate mean image
 
-parfor crun = 1:nrun %Still submit as a parfor to avoid overloading a login node
-    spm('defaults', 'PET');
-    spm_jobman('initcfg')
-    try
-        spm_jobman('run', jobs, inputs{:,crun});
-        imcalcworkedcorrectly(crun) = 1;
-    catch
-        imcalcworkedcorrectly(crun) = 0;
-    end
+split_stem = regexp(core_imagepaths, '/', 'split');
+inputs{1,2} = cell(length(core_imagepaths),1);
+
+for i = 1:length(core_imagepaths)
+    inputs{1,2}(i) = cellstr(['/' fullfile(split_stem{i}{1:end-1}) '//wc1' split_stem{i}{end}]);
 end
+
+inputs{2,2} = 'average_matchedcontrol_SD_grey.nii';
+
+flags.dmtx = 1; %Read into data matrix
+spm_imcalc(inputs{1,2},inputs{2,2},'mean(X)',flags); %Calculate mean image
+
+split_stem = regexp(core_imagepaths, '/', 'split');
+inputs{1,3} = cell(length(core_imagepaths),1);
+
+for i = 1:length(core_imagepaths)
+    inputs{1,3}(i) = cellstr(['/' fullfile(split_stem{i}{1:end-1}) '//wc2' split_stem{i}{end}]);
+end
+
+inputs{2,3} = 'average_matchedcontrol_SD_white.nii';
+
+flags.dmtx = 1; %Read into data matrix
+spm_imcalc(inputs{1,3},inputs{2,3},'mean(X)',flags); %Calculate mean image
+
+spm_imcalc(char(inputs(2,1:3)'),'average_skullstripped_matchedcontrol_SD.nii','i1.*(i2>0.05|i3>0.05)')
+
+
 
 %% Now repeat for white matter
 
@@ -1037,9 +1053,9 @@ end
 %     thisROI_number = all_ROInames{thisROI_index}(1:(thisROI_place{thisROI_index}-1));
 %     ROInumbers(i) = str2num(thisROI_number);
 % end
-ROInumbers = [83,94,93,92,91,55,84,98,97,96,95,56]; %From subparcellation, instead of roi names.
-ROInames = {'L Pole','L Inf Front','L Inf Mid Front','L Inf Mid Back','L Inf Back','L Fusiform','R Pole','R Inf Front','R Inf Mid Front','R Inf Mid Back','R Inf Back','R Fusiform'};
-ROInames_noside = {'Pole','Inf Front','Inf Mid Front','Inf Mid Back','Inf Back','Fusiform'};
+ROInumbers = [83,87,94,93,92,91,55,84,88,98,97,96,95,56]; %From subparcellation, instead of roi names.
+ROInames = {'L Pole Up','L Pole Mid','L Inf Front','L Inf Mid Front','L Inf Mid Back','L Inf Back','L Fusiform','R Pole Up','R Pole Mid','R Inf Front','R Inf Mid Front','R Inf Mid Back','R Inf Back','R Fusiform'};
+ROInames_noside = {'Sup Pole', 'Mid Pole','Inf Gy Front','Inf Gy Mid Front','Inf Gy Mid Back','Inf Gy Back','Fusiform Gy'};
 %ROInumber is in column 1, mean is column 7, median is column 8, nonzero mean is column 14, masked mean is column 28 and median is column 29
 extracted_roi_values = zeros(size(SD_composite,1),length(ROInames));
 extracted_masked_roi_values = zeros(size(SD_composite,1),length(ROInames));
@@ -1086,6 +1102,7 @@ extracted_nonzero_roi_values(omit_these,:) = [];
 correctedgrey(omit_these,:) = [];
 
 figure
+set(gcf,'color','w')
 hold on
 [rho,~] = corr(SD_composite(:,2),extracted_masked_roi_values,'type','Spearman');
 plot(rho(1:floor(length(rho)/2)),'b')
@@ -1095,12 +1112,18 @@ set(gca,'xtick',[1:length(ROInames_noside)],'xticklabels',ROInames_noside,'XTick
 xlim([0 length(ROInames_noside)+1])
 ylim([-1 0.1])
 ylabel('Spearman Correlation')
-plot([0 13],[-0.648 -0.648],'k--')
-plot([0 13],[-0.564 -0.564],'k--')
-plot([0 13],[0 0],'k-')
-title('Correlation of Composite Score to Grey Matter')
+plot([0 length(ROInames_noside)],[-0.745 -0.745],'k--')
+plot([0 length(ROInames_noside)],[-0.648 -0.648],'k--')
+plot([0 length(ROInames_noside)],[-0.564 -0.564],'k--')
+plot([0 length(ROInames_noside)],[0 0],'k-')
+text(length(ROInames_noside)+0.1,-0.564,'p<0.05')
+text(length(ROInames_noside)+0.1,-0.648,'p<0.025')
+text(length(ROInames_noside)+0.1,-0.745,'p<0.01')
+title('Composite Score to Grey Matter Volume')
+spm_renumber_atlas('./rwaal_MNI_V4_split.nii',[ROInumbers(1:(length(ROInumbers)/2)-1),ROInumbers(1+(length(ROInumbers)/2):end-1)],[rho(1:(length(ROInumbers)/2)-1),rho(1+(length(ROInumbers)/2):end-1)],'_Composite') %Omit the fusiform to make it neater
 
 figure
+set(gcf,'color','w')
 hold on
 [rho,~] = corr(SD_composite_FAM(:,2),extracted_masked_roi_values,'type','Spearman');
 plot(rho(1:floor(length(rho)/2)),'b')
@@ -1110,12 +1133,18 @@ set(gca,'xtick',[1:length(ROInames_noside)],'xticklabels',ROInames_noside,'XTick
 xlim([0 length(ROInames_noside)+1])
 ylim([-1 0.1])
 ylabel('Spearman Correlation')
-plot([0 13],[-0.648 -0.648],'k--')
-plot([0 13],[-0.564 -0.564],'k--')
-plot([0 13],[0 0],'k-')
-title('Correlation of Familiarity Score to Grey Matter')
+plot([0 length(ROInames_noside)],[-0.745 -0.745],'k--')
+plot([0 length(ROInames_noside)],[-0.648 -0.648],'k--')
+plot([0 length(ROInames_noside)],[-0.564 -0.564],'k--')
+plot([0 length(ROInames_noside)],[0 0],'k-')
+text(length(ROInames_noside)+0.1,-0.564,'p<0.05')
+text(length(ROInames_noside)+0.1,-0.648,'p<0.025')
+text(length(ROInames_noside)+0.1,-0.745,'p<0.01')
+title('Familiarity Score to Grey Matter Volume')
+spm_renumber_atlas('./rwaal_MNI_V4_split.nii',[ROInumbers(1:(length(ROInumbers)/2)-1),ROInumbers(1+(length(ROInumbers)/2):end-1)],[rho(1:(length(ROInumbers)/2)-1),rho(1+(length(ROInumbers)/2):end-1)],'_Familiarity') %Omit the fusiform to make it neater
 
 figure
+set(gcf,'color','w')
 hold on
 [rho,~] = corr(SD_composite_both(:,2),extracted_masked_roi_values,'type','Spearman');
 plot(rho(1:floor(length(rho)/2)),'b')
@@ -1125,10 +1154,15 @@ set(gca,'xtick',[1:length(ROInames_noside)],'xticklabels',ROInames_noside,'XTick
 xlim([0 length(ROInames_noside)+1])
 ylim([-1 0.1])
 ylabel('Spearman Correlation')
-plot([0 13],[-0.648 -0.648],'k--')
-plot([0 13],[-0.564 -0.564],'k--')
-plot([0 13],[0 0],'k-')
-title('Correlation of Combined Score to Grey Matter')
+plot([0 length(ROInames_noside)],[-0.745 -0.745],'k--')
+plot([0 length(ROInames_noside)],[-0.648 -0.648],'k--')
+plot([0 length(ROInames_noside)],[-0.564 -0.564],'k--')
+plot([0 length(ROInames_noside)],[0 0],'k-')
+text(length(ROInames_noside)+0.1,-0.564,'p<0.05')
+text(length(ROInames_noside)+0.1,-0.648,'p<0.025')
+text(length(ROInames_noside)+0.1,-0.745,'p<0.01')
+title('Combined Score to Grey Matter Volume')
+spm_renumber_atlas('./rwaal_MNI_V4_split.nii',[ROInumbers(1:(length(ROInumbers)/2)-1),ROInumbers(1+(length(ROInumbers)/2):end-1)],[rho(1:(length(ROInumbers)/2)-1),rho(1+(length(ROInumbers)/2):end-1)],'_Combined') %Omit the fusiform to make it neater
 
 %% Now create some figures for visualisation
 
